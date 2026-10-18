@@ -1,0 +1,18 @@
+[
+  {"id": "q01", "question": "What is the SI unit of force?", "class_level": 9, "subject": "science",
+   "answerable": true, "keywords": ["newton"], "chapter_hint": "Force"},
+  {"id": "q02", "question": "Which pigment absorbs sunlight during photosynthesis?", "class_level": 10, "subject": "science",
+   "answerable": true, "keywords": ["chlorophyll"], "chapter_hint": "Life Processes"},
+  {"id": "q03", "question": "Find the roots of x^2 - 5x + 6 = 0", "class_level": 10, "subject": "math",
+   "answerable": true, "keywords": ["2", "3"], "pass_ratio": 1.0, "chapter_hint": "Quadratic"},
+  {"id": "q04", "question": "In which year did the French Revolution begin?", "class_level": 9, "subject": "social_science",
+   "answerable": true, "keywords": ["1789"], "chapter_hint": "French Revolution"},
+  {"id": "q05", "question": "What are the functions of management?", "class_level": 12, "subject": "commerce",
+   "answerable": true, "keywords": ["planning", "organising", "staffing", "directing", "controlling"],
+   "pass_ratio": 0.6, "chapter_hint": "Management"},
+  {"id": "q06", "question": "प्रकाश संश्लेषण में कौन-सा वर्णक सूर्य का प्रकाश अवशोषित करता है?", "class_level": 10,
+   "subject": "science", "language": "hi", "answerable": true, "keywords": ["क्लोरोफिल", "पर्णहरित"],
+   "pass_ratio": 0.5, "chapter_hint": "Life Processes"},
+  {"id": "u01", "question": "Who won the FIFA World Cup in 2022?", "class_level": null, "subject": null, "answerable": false},
+  {"id": "u02", "question": "Write a Python program to sort a list.", "class_level": null, "subject": null, "answerable": false}
+]

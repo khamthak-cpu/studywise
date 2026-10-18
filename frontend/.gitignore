@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Secrets and local config
+.env
+
+# Data (large or rebuildable)
+data/raw/
+data/cleaned/
+data/chroma_db/
+
+# Evaluation output
+evaluation/results.json
+
+# OS / editor
+.DS_Store
+Thumbs.db

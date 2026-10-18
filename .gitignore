@@ -1,0 +1,31 @@
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Frontend
+node_modules/
+dist/
+.vite/
+
+# Local RAG database
+data/chroma_db/
+chroma_db/
+
+# Generated data and databases
+*.sqlite3
+*.db
+
+# Editor settings
+.vscode/
+
+# Logs
+*.log
