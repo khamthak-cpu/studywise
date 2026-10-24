@@ -35,7 +35,7 @@ export default function Home() {
   const [history, setHistory] = useState<string[]>(["TCP vs UDP", "RAG explained", "Transport layer revision"]);
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
-
+  const chatScrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (isMockMode) return;
     checkHealth()
@@ -44,7 +44,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const container = chatScrollRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
   }, [messages, loading]);
 
   async function sendQuestion(rawQuestion: string, selectedMode = mode) {
@@ -120,7 +126,12 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="workspace-content">
+       <div
+          className="workspace-content"
+          ref={messages.length > 0 && !productivityOpen && !historyOpen
+            ? chatScrollRef
+            : undefined}
+        >
           {productivityOpen ? <Productivity onBack={() => setProductivityOpen(false)} /> : historyOpen ? (
             <section className="history-view">
               <div className="eyebrow">YOUR LEARNING, IN ONE PLACE</div>

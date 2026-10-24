@@ -1,6 +1,18 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { ArrowLeft, BookOpenCheck, Check, Clock3, Flame, Plus, RotateCcw, Save, Target, TrendingUp } from "lucide-react";
-import { addAssessment, addSession, addTask, getSummary, getTasks, localDate, saveReflection, Task, updateTask, DailySummary } from "../api/productivity";
+import {
+  addAssessment,
+  addSession,
+  addTask,
+  getSummary,
+  getTasks,
+  localDate,
+  saveReflection,
+  updateTask,
+} from "../api/productivity";
+
+import type { Task, DailySummary } from "../api/productivity";
 
 type Props={onBack:()=>void};
 export default function Productivity({onBack}:Props){
