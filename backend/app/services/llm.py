@@ -191,7 +191,10 @@ class LLM:
         ]
 
         messages.extend(_clean_history(history))
-        messages.append({"role": "user", "content": question})
+        messages.append({
+            "role": "user",
+            "content": question,
+            })
         return messages
 
     def build_messages(
@@ -250,6 +253,13 @@ class LLM:
 
         message = response.message
         content = (getattr(message, "content", None) or "").strip()
+
+        # Remove a leaked reasoning section if the model includes one.
+        if "</think>" in content:
+            content = content.rsplit("</think>", 1)[-1].strip()
+
+        if content.startswith("<think>"):
+            content = ""
 
         if not content:
             thinking = (
