@@ -199,3 +199,43 @@ def delete_conversation(
             (conversation_id, student_id),
         )
         return cur.rowcount > 0
+
+def get_recent_messages(
+    student_id: str,
+    conversation_id: int,
+    limit: int = 16,
+) -> list[dict[str, str]]:
+    """Return recent messages in chronological order."""
+    limit = max(1, min(limit, 40))
+
+    with connect() as db:
+        conversation = db.execute(
+            """
+            SELECT id
+            FROM conversations
+            WHERE id = ? AND student_id = ?
+            """,
+            (conversation_id, student_id),
+        ).fetchone()
+
+        if conversation is None:
+            raise ValueError("Conversation not found")
+
+        rows = db.execute(
+            """
+            SELECT role, content
+            FROM chat_messages
+            WHERE conversation_id = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (conversation_id, limit),
+        ).fetchall()
+
+        return [
+            {
+                "role": row["role"],
+                "content": row["content"],
+            }
+            for row in reversed(rows)
+        ]

@@ -11,6 +11,8 @@ AnswerOrigin = Literal["model", "notes", "web", "mixed", "fallback"]
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=5, max_length=1000)
+    conversation_id: int | None = Field(default=None, gt=0)
+    student_id: str = Field(default="demo-student", min_length=1, max_length=80)
     class_level: int | None = Field(default=None, ge=8, le=12)
     subject: Subject | None = None
     language: Literal["auto", "en", "hi"] = "auto"
@@ -19,7 +21,11 @@ class AskRequest(BaseModel):
 
     @model_validator(mode="after")
     def _check_combo(self):
-        if self.subject == "commerce" and self.class_level and self.class_level < 11:
+        if (
+            self.subject == "commerce"
+            and self.class_level is not None
+            and self.class_level < 11
+        ):
             raise ValueError("Commerce is available for Class 11-12 only")
         return self
 

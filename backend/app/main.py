@@ -30,7 +30,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize application services
     cfg = get_settings()
-
     client = AsyncClient(
         host=cfg.ollama_host,
         timeout=cfg.llm_timeout_s,
@@ -65,14 +64,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register API routers
+# Register API routers once, after creating the app
 app.include_router(ask.router)
 app.include_router(health.router)
 app.include_router(productivity.router)
 app.include_router(history.router)
 
 
-# Handle language-model errors
 @app.exception_handler(LLMError)
 async def llm_error_handler(
     request: Request,

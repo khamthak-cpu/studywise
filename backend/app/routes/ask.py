@@ -9,6 +9,7 @@ from app.schemas import AskRequest, AskResponse
 from app.services import fallback
 from app.services.connectivity import is_online
 from app.services.web_search import search_web
+from app.services import chat_history
 
 router = APIRouter()
 log = logging.getLogger(__name__)
