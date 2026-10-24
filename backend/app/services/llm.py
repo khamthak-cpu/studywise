@@ -78,6 +78,9 @@ class LLM:
         if subject == "math":
             system.append(_prompt("math"))
 
+        if subject == "coding":
+            system.append(_prompt("coding"))    
+
         if simplify:
             system.append(_prompt("simplify"))
 
