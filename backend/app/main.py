@@ -8,26 +8,36 @@ from fastapi.responses import JSONResponse
 from ollama import AsyncClient
 
 from app.config import get_settings
-from app.routes import ask, health, productivity
+# from app.routes import ask, health, productivity
 from app.services.llm import LLM, LLMError
 from app.services.retriever import Retriever
 from app.services.productivity import init_db
+from app.routes import ask, health, productivity, history
+from app.services.chat_history import init_history_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    init_history_db()
+
     cfg = get_settings()
-    client = AsyncClient(host=cfg.ollama_host, timeout=cfg.llm_timeout_s)
+    client = AsyncClient(
+        host=cfg.ollama_host,
+        timeout=cfg.llm_timeout_s,
+    )
     app.state.settings = cfg
     app.state.ollama = client
     app.state.retriever = Retriever(cfg, client)
     app.state.llm = LLM(cfg, client)
-    warm = asyncio.create_task(app.state.llm.warmup())  # avoid slow first request
-    yield
-    warm.cancel()
+
+    warm = asyncio.create_task(app.state.llm.warmup())
+    try:
+        yield
+    finally:
+        warm.cancel()
+        await asyncio.gather(warm, return_exceptions=True)
 
 
 app = FastAPI(title="studywise", version="0.1.0", lifespan=lifespan)
