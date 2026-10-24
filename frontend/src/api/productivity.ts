@@ -91,7 +91,8 @@ async function request<T>(
     });
   } catch {
     throw new Error(
-      `Cannot connect to StudyWise API at ${API_URL}. Check that FastAPI is running and the API URL is correct.`,
+      `Cannot connect to StudyWise API at ${API_URL}. ` +
+        "Check that FastAPI is running and the API URL is correct.",
     );
   }
 
@@ -111,7 +112,7 @@ async function request<T>(
         message = body.message;
       }
     } catch {
-      // Keep the HTTP status message if the response isn't JSON.
+      // Keep the HTTP status message if the response is not JSON.
     }
 
     throw new Error(message);
@@ -145,19 +146,21 @@ function queryDate(date: string): string {
   return encodeURIComponent(validateDate(date));
 }
 
-export const getSummary = (
-  date: string,
-): Promise<DailySummary> =>
-  request<DailySummary>(
+// Daily productivity summary
+export function getSummary(date: string): Promise<DailySummary> {
+  return request<DailySummary>(
     `/productivity/summary?student_id=${encodeURIComponent(STUDENT_ID)}&date=${queryDate(date)}`,
   );
+}
 
-export const getTasks = (
+// Tasks for a selected date
+export function getTasks(
   date: string,
-): Promise<{ items: Task[] }> =>
-  request<{ items: Task[] }>(
+): Promise<{ items: Task[] }> {
+  return request<{ items: Task[] }>(
     `/productivity/tasks?student_id=${encodeURIComponent(STUDENT_ID)}&date=${queryDate(date)}`,
   );
+}
 
 export type NewTask = {
   title: string;
@@ -166,11 +169,14 @@ export type NewTask = {
   due_date: string;
 };
 
-export const addTask = (
-  task: NewTask,
-): Promise<Task> => {
+// Create a task
+export function addTask(task: NewTask): Promise<Task> {
   if (!task.title.trim()) {
     throw new Error("Task title cannot be empty.");
+  }
+
+  if (!task.subject.trim()) {
+    throw new Error("Subject cannot be empty.");
   }
 
   if (
@@ -186,16 +192,18 @@ export const addTask = (
     body: JSON.stringify({
       ...task,
       title: task.title.trim(),
+      subject: task.subject.trim(),
       student_id: STUDENT_ID,
       due_date: validateDate(task.due_date),
     }),
   });
-};
+}
 
-export const updateTask = (
+// Mark a task as completed or pending
+export function updateTask(
   id: number,
   completed: boolean,
-): Promise<Task> => {
+): Promise<Task> {
   if (!Number.isInteger(id) || id < 1) {
     throw new Error("Invalid task ID.");
   }
@@ -207,7 +215,7 @@ export const updateTask = (
       completed,
     }),
   });
-};
+}
 
 export type NewSession = {
   subject: string;
@@ -219,9 +227,8 @@ export type NewSession = {
   note: string;
 };
 
-export const addSession = (
-  body: NewSession,
-): Promise<unknown> => {
+// Record a focus session
+export function addSession(body: NewSession): Promise<unknown> {
   const start = new Date(body.started_at);
   const end = new Date(body.ended_at);
 
@@ -231,6 +238,10 @@ export const addSession = (
     end <= start
   ) {
     throw new Error("Session end time must be after its start time.");
+  }
+
+  if (!body.subject.trim()) {
+    throw new Error("Subject cannot be empty.");
   }
 
   if (
@@ -257,12 +268,13 @@ export const addSession = (
     method: "POST",
     body: JSON.stringify({
       ...body,
+      subject: body.subject.trim(),
       started_at: start.toISOString(),
       ended_at: end.toISOString(),
       student_id: STUDENT_ID,
     }),
   });
-};
+}
 
 export type NewAssessment = {
   subject: string;
@@ -271,9 +283,14 @@ export type NewAssessment = {
   delayed_recall: boolean;
 };
 
-export const addAssessment = (
+// Record quiz results
+export function addAssessment(
   body: NewAssessment,
-): Promise<unknown> => {
+): Promise<unknown> {
+  if (!body.subject.trim()) {
+    throw new Error("Subject cannot be empty.");
+  }
+
   if (
     !Number.isInteger(body.total_questions) ||
     body.total_questions < 1 ||
@@ -294,16 +311,18 @@ export const addAssessment = (
     method: "POST",
     body: JSON.stringify({
       ...body,
+      subject: body.subject.trim(),
       student_id: STUDENT_ID,
       taken_at: new Date().toISOString(),
     }),
   });
-};
+}
 
-export const saveReflection = (
+// Save daily reflection
+export function saveReflection(
   date: string,
   reflection: string,
-): Promise<unknown> => {
+): Promise<unknown> {
   if (reflection.length > 1000) {
     throw new Error("Reflection must be 1000 characters or fewer.");
   }
@@ -316,8 +335,9 @@ export const saveReflection = (
       reflection: reflection.trim(),
     }),
   });
-};
+}
 
+// Local date in YYYY-MM-DD format
 export function localDate(): string {
   const now = new Date();
   const year = now.getFullYear();
