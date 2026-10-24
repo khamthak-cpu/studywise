@@ -8,15 +8,17 @@ from fastapi.responses import JSONResponse
 from ollama import AsyncClient
 
 from app.config import get_settings
-from app.routes import ask, health
+from app.routes import ask, health, productivity
 from app.services.llm import LLM, LLMError
 from app.services.retriever import Retriever
+from app.services.productivity import init_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_db()
     cfg = get_settings()
     client = AsyncClient(host=cfg.ollama_host, timeout=cfg.llm_timeout_s)
     app.state.settings = cfg
@@ -35,6 +37,7 @@ app.add_middleware(
 )
 app.include_router(ask.router)
 app.include_router(health.router)
+app.include_router(productivity.router)
 
 
 @app.exception_handler(LLMError)

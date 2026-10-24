@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  BookOpen, BookOpenText, ChevronDown, CircleHelp, GraduationCap,
+  BookOpen, BookOpenText, ChevronDown, CircleHelp, GraduationCap, TrendingUp,
   History, Library, Menu, MessageCircle, PanelLeftClose, Plus, Search, Settings2,
   ShieldCheck, Sparkles, X
 } from "lucide-react";
@@ -10,6 +10,7 @@ import ModeToggle from "../components/ModeToggle";
 import StatusBar from "../components/StatusBar";
 import { askQuestion, checkHealth, isMockMode } from "../api/ask";
 import type { AskResponse, ChatMessage } from "../types";
+import Productivity from "./Productivity";
 
 const starterPrompts = [
   { icon: "book", title: "Explain a difficult concept", prompt: "Explain TCP and UDP in simple terms." },
@@ -29,6 +30,7 @@ export default function Home() {
   const [status, setStatus] = useState<"offline" | "online" | "checking" | "unavailable">(isMockMode ? "offline" : "checking");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [productivityOpen, setProductivityOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [history, setHistory] = useState<string[]>(["TCP vs UDP", "RAG explained", "Transport layer revision"]);
   const [error, setError] = useState("");
@@ -69,6 +71,7 @@ export default function Home() {
     setMessages([]);
     setError("");
     setHistoryOpen(false);
+    setProductivityOpen(false);
   }
 
   const filteredHistory = history.filter((item) => item.toLowerCase().includes(searchValue.toLowerCase()));
@@ -86,7 +89,8 @@ export default function Home() {
 
         <div className="sidebar-section-label">YOUR WORKSPACE</div>
         <button className={`nav-item ${!historyOpen ? "nav-active" : ""}`} onClick={() => setHistoryOpen(false)}><MessageCircle size={17} /><span>Study assistant</span></button>
-        <button className={`nav-item ${historyOpen ? "nav-active" : ""}`} onClick={() => setHistoryOpen(true)}><History size={17} /><span>Recent conversations</span><span className="nav-count">{history.length}</span></button>
+        <button className={`nav-item ${historyOpen ? "nav-active" : ""}`} onClick={() => { setHistoryOpen(true); setProductivityOpen(false); }}><History size={17} /><span>Recent conversations</span><span className="nav-count">{history.length}</span></button>
+        <button className={`nav-item ${productivityOpen ? "nav-active" : ""}`} onClick={() => { setProductivityOpen(true); setHistoryOpen(false); }}><TrendingUp size={17} /><span>Productivity</span></button>
         <button className="nav-item" onClick={() => window.alert("Your textbook library will be connected when upload and ingestion endpoints are ready.")}><Library size={17} /><span>My library</span><span className="soon-label">SOON</span></button>
 
         <div className="sidebar-section-label subject-label">SUGGESTED SUBJECTS</div>
@@ -108,7 +112,7 @@ export default function Home() {
         <header className="topbar">
           <div className="topbar-left">
             {!sidebarOpen && <button className="icon-button reopen-sidebar" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar"><Menu size={19} /></button>}
-            <div className="breadcrumb"><span>Workspace</span><span className="crumb-slash">/</span><strong>{historyOpen ? "Conversations" : "Study assistant"}</strong><ChevronDown size={14} /></div>
+            <div className="breadcrumb"><span>Workspace</span><span className="crumb-slash">/</span><strong>{productivityOpen ? "Productivity" : historyOpen ? "Conversations" : "Study assistant"}</strong><ChevronDown size={14} /></div>
           </div>
           <div className="topbar-right">
             <StatusBar mode={status} mockMode={isMockMode} />
@@ -117,7 +121,7 @@ export default function Home() {
         </header>
 
         <div className="workspace-content">
-          {historyOpen ? (
+          {productivityOpen ? <Productivity onBack={() => setProductivityOpen(false)} /> : historyOpen ? (
             <section className="history-view">
               <div className="eyebrow">YOUR LEARNING, IN ONE PLACE</div>
               <h1>Recent conversations</h1>
@@ -150,12 +154,12 @@ export default function Home() {
           )}
         </div>
 
-        <footer className="composer-area">
+        {!productivityOpen && <footer className="composer-area">
           <div className="composer-inner">
             <ModeToggle mode={mode} onModeChange={setMode} language={language} onLanguageChange={setLanguage} />
             <ChatInput onSend={(value) => sendQuestion(value)} disabled={loading} onSimplify={() => { setMode("simplify"); if (messages.length > 0) { const lastUser = [...messages].reverse().find((message) => message.role === "user"); if (lastUser) sendQuestion(lastUser.content, "simplify"); } }} />
           </div>
-        </footer>
+        </footer>}
       </main>
     </div>
   );
