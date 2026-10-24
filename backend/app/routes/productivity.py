@@ -8,6 +8,12 @@ import sqlite3
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from fastapi import APIRouter
+
+router = APIRouter(
+    prefix="/productivity",
+    tags=["productivity"],
+)
 
 DB_PATH = Path(
     os.getenv(
