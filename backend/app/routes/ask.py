@@ -6,10 +6,9 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 
 from app.schemas import AskRequest, AskResponse
-from app.services import fallback
+from app.services import fallback, chat_history
 from app.services.connectivity import is_online
 from app.services.web_search import search_web
-from app.services import chat_history
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -25,10 +24,8 @@ _TEXTBOOK_HINTS = re.compile(
 
 _CODING_HINTS = re.compile(
     r"\b(write|generate|debug|fix|implement|code|coding|"
-    r"program|programming|function|algorithm|"
-    r"python|javascript|typescript|html|css|"
-    r"java|sql|react|api|bug|traceback|"
-    r"javascript|typescript|c\+\+)\b",
+    r"program|programming|function|algorithm|python|javascript|"
+    r"typescript|html|css|java|sql|react|api|bug|traceback)\b",
     re.IGNORECASE,
 )
 
@@ -36,17 +33,35 @@ _CODING_HINTS = re.compile(
 def _resolve_language(req: AskRequest) -> str:
     if req.language != "auto":
         return req.language
-
     return "hi" if _DEVANAGARI.search(req.question) else "en"
 
 
 def _is_coding_request(req: AskRequest) -> bool:
-    subject = str(req.subject or "").lower()
-
     return (
-        subject == "coding"
+        str(req.subject or "").lower() == "coding"
         or bool(_CODING_HINTS.search(req.question))
     )
+
+
+def _format_sources(sources) -> str:
+    """Convert retrieved source objects into readable LLM context."""
+    blocks = []
+
+    for source in sources:
+        meta = " | ".join(
+            part
+            for part in (
+                source.title,
+                source.section,
+                f"p.{source.page}" if source.page else None,
+            )
+            if part
+        )
+        blocks.append(
+            f"[{source.id}] {meta}\n{source.text.strip()}"
+        )
+
+    return "\n\n".join(blocks)
 
 
 @router.post("/ask", response_model=AskResponse)
@@ -70,30 +85,83 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
         try:
             online = await is_online()
         except Exception:
-            log.warning(
-                "Connectivity check failed",
-                exc_info=True,
-            )
+            log.warning("Connectivity check failed", exc_info=True)
 
     def elapsed() -> int:
         return int((time.perf_counter() - t0) * 1000)
 
     def needs_textbook() -> bool:
         return bool(
-            req.class_level
-            or _TEXTBOOK_HINTS.search(req.question)
+            req.class_level or _TEXTBOOK_HINTS.search(req.question)
         )
 
-    # Generate a direct answer first.
-    try:
-        direct_answer = await llm.generate(
-            llm.build_direct_messages(
-                req.question,
-                lang,
-                req.simplify,
-                llm_subject,
-            )
+    # Load earlier messages BEFORE saving the current question.
+    history: list[dict[str, str]] = []
+    conversation_id = req.conversation_id
+    student_id = req.student_id.strip()
+
+    if not student_id or len(student_id) > 80:
+        raise HTTPException(
+            status_code=400,
+            detail="student_id must be 1–80 characters",
         )
+
+    if conversation_id is not None:
+        try:
+            history = chat_history.get_recent_messages(
+                student_id=student_id,
+                conversation_id=conversation_id,
+                limit=16,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail=str(exc),
+            ) from exc
+
+        # Persist the current question after loading prior history.
+        saved = chat_history.add_message(
+            student_id=student_id,
+            conversation_id=conversation_id,
+            role="user",
+            content=req.question,
+        )
+
+        if saved is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found",
+            )
+
+    def save_assistant_answer(answer: str) -> None:
+        """Persist the final answer once for this request."""
+        if conversation_id is None:
+            return
+
+        saved = chat_history.add_message(
+            student_id=student_id,
+            conversation_id=conversation_id,
+            role="assistant",
+            content=answer,
+        )
+
+        if saved is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found",
+            )
+
+    # Generate a direct answer with conversation history.
+    try:
+        direct_messages = llm.build_direct_messages(
+            question=req.question,
+            language=lang,
+            simplify=req.simplify,
+            subject=llm_subject,
+            history=history,
+        )
+        direct_answer = await llm.generate(direct_messages)
+
     except Exception as exc:
         log.exception("Direct LLM answer failed")
         raise HTTPException(
@@ -101,17 +169,16 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             detail=f"Could not generate an answer: {exc}",
         ) from exc
 
-    # Coding requests should not trigger textbook retrieval
-    # merely because of generic coding keywords.
     needs_rag = not is_coding and (
         (mode == "offline" and needs_textbook())
         or direct_answer.strip().startswith("[NEED_RAG]")
         or needs_textbook()
     )
 
-    # Return direct answers for general questions unless
-    # online mode was explicitly requested.
+    # Return direct answers for general questions unless online
+    # mode was explicitly requested.
     if not needs_rag and mode != "online":
+        save_assistant_answer(direct_answer)
         return AskResponse(
             answer=direct_answer,
             sources=[],
@@ -147,7 +214,6 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
                         found,
                         cfg.min_score,
                     )
-
                     context.extend(local_context)
 
                     if local_context:
@@ -156,8 +222,8 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             except Exception:
                 log.exception("Textbook retrieval failed")
 
-    # Search the web in explicit online mode, or in auto mode
-    # when evidence is needed but local textbook results are absent.
+    # Search online when explicitly requested, or when auto mode
+    # needs evidence not found in the local textbook index.
     should_search_web = (
         online
         and mode in ("online", "auto")
@@ -172,16 +238,8 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             filter(
                 None,
                 [
-                    (
-                        f"class {req.class_level}"
-                        if req.class_level
-                        else None
-                    ),
-                    (
-                        req.subject.replace("_", " ")
-                        if req.subject
-                        else None
-                    ),
+                    f"class {req.class_level}" if req.class_level else None,
+                    req.subject.replace("_", " ") if req.subject else None,
                     "NCERT" if mode == "auto" else None,
                 ],
             )
@@ -199,7 +257,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
         except Exception:
             log.exception("Web search failed")
 
-    # If no supporting evidence is available, use the direct answer.
+    # No supporting evidence: use the direct answer.
     if not context:
         answer = direct_answer
 
@@ -210,6 +268,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
                 "question or provide the relevant textbook passage."
             )
 
+        save_assistant_answer(answer)
         return AskResponse(
             answer=answer,
             sources=[],
@@ -223,17 +282,21 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
     for i, source in enumerate(context, 1):
         source.id = i
 
-    # Generate a final answer grounded in retrieved evidence.
+    # Pass a text representation of sources and the same conversation
+    # history to the evidence-based answer generation path.
     try:
-        answer = await llm.generate(
-            llm.build_messages(
-                req.question,
-                context,
-                lang,
-                req.simplify,
-                llm_subject,
-            )
+        context_text = _format_sources(context)
+
+        messages = llm.build_messages(
+            question=req.question,
+            context=context_text,
+            language=lang,
+            simplify=req.simplify,
+            subject=llm_subject,
+            history=history,
         )
+
+        answer = await llm.generate(messages)
 
         if answer.strip().startswith("[NEED_RAG]"):
             answer = direct_answer
@@ -251,6 +314,8 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
         if origins
         else "fallback"
     )
+
+    save_assistant_answer(answer)
 
     return AskResponse(
         answer=answer,

@@ -90,38 +90,38 @@ class LLM:
         subject: str | None,
         context: str | None = None,
     ) -> str:
+        
         parts: list[str] = [
             (
-                "You are StudyWise, a patient educational tutor for "
-                "Indian school students in Classes 8–12."
+                "You are StudyWise, a patient educational tutor for Indian "
+                "school students in Classes 8-12."
             ),
             (
-                "Answer the student's latest question directly. "
-                "Use conversation history to resolve references such as "
-                "'it', 'they', 'why?', 'give an example', and "
-                "'how does it differ?' when possible."
+                "Answer the student's latest question directly and accurately. "
+                "Use conversation history to understand follow-up questions "
+                "and resolve references such as 'it', 'this', and 'they'."
             ),
             (
-                "If a follow-up has a likely meaning from the conversation, "
-                "answer that meaning instead of asking for clarification. "
-                "Ask a clarification question only when the meaning cannot "
-                "reasonably be inferred."
+                "Give a complete explanation in 2-4 clear sentences for normal "
+                "educational questions, unless the student requests another length. "
+                "Use simple, age-appropriate language and an example when useful."
             ),
             (
-                "Do not narrate your reasoning, list possible interpretations, "
-                "or explain what you think the student might mean. "
-                "Give the answer itself."
+                "If the conversation makes the intended question clear, answer it "
+                "instead of asking unnecessary clarification questions."
             ),
             (
-                "If the student clearly changes topics, answer the new "
-                "question. Keep explanations clear, concise, and suitable "
-                "for the student's level."
+                "Output only the student-facing answer. Never include internal "
+                "monologue, planning, self-talk, answer outlines, or commentary "
+                "about how you are interpreting or answering the question."
             ),
             (
-                "Never invent citations, textbook page numbers, or claims "
-                "about source passages."
+                "For textbook-based answers, use the supplied context accurately. "
+                "Never invent citations or claim a source supports something it does not."
             ),
         ]
+
+       
         parts.extend([
             (
                 "Return only the final answer to the student's question. "
@@ -133,6 +133,31 @@ class LLM:
                 "Follow requested word limits closely. If the student asks "
                 "for an explanation in 30 words, provide the explanation "
                 "itself, not a description of your plan."
+            ),
+            (
+                "Give complete, useful educational answers. For a normal "
+                "educational question, explain the concept in 2-4 clear "
+                "sentences unless the student requests a different length."
+            ),
+            (
+                "For definitions, explain what the concept is, what it does, "
+                "and why it matters when relevant. Include a simple example "
+                "when it improves understanding."
+            ),
+            (
+                "Do not give an answer that is merely the beginning of a "
+                "definition or sentence. Finish the explanation clearly. "
+                "Do not stop mid-sentence or leave a thought incomplete."
+            ),
+            (
+                "Use simple, age-appropriate language for Indian school "
+                "students in Classes 8-12. Prefer clear explanations over "
+                "unnecessarily brief answers."
+            ),
+            (
+                "Respect the student's requested length: keep answers short "
+                "when explicitly requested, but otherwise provide enough "
+                "detail to fully answer the question."
             ),
         ])
 
@@ -171,6 +196,9 @@ class LLM:
 
         return "\n\n".join(parts)
 
+    
+   
+        
     def build_direct_messages(
         self,
         question: str,
@@ -179,23 +207,59 @@ class LLM:
         subject: str | None = None,
         history: list[dict[str, str]] | None = None,
     ) -> list[dict[str, str]]:
+        system_prompt = self._system_prompt(
+            language=language,
+            simplify=simplify,
+            subject=subject,
+        )
+
+        system_prompt += (
+            "\n\nFOLLOW-UP INSTRUCTIONS:\n"
+            "Use the conversation history to understand the student's "
+            "latest question. Resolve words such as 'it', 'this', and "
+            "'they' using earlier messages.\n"
+            "If the student asks how one concept differs from another, "
+            "identify the previously discussed concept and compare them "
+            "directly. Do not ask for clarification if the conversation "
+            "provides a reasonable interpretation.\n"
+            "Answer the actual question with a complete, clear explanation. "
+            "Do not output internal reasoning, planning, or commentary."
+        )
+
+        cleaned_history = _clean_history(history)
+
         messages: list[dict[str, str]] = [
             {
                 "role": "system",
-                "content": self._system_prompt(
-                    language=language,
-                    simplify=simplify,
-                    subject=subject,
-                ),
+                "content": system_prompt,
             }
         ]
 
-        messages.extend(_clean_history(history))
+        if cleaned_history:
+            messages.append({
+                "role": "system",
+                "content": (
+                    "The following messages are the conversation history. "
+                    "Use them to resolve the student's current question. "
+                    "They are context, not a replacement for the current question."
+                ),
+            })
+            messages.extend(cleaned_history)
+
         messages.append({
             "role": "user",
             "content": question,
-            })
+        })
+
+        log.info(
+            "Direct LLM request: history_messages=%d, question=%r",
+            len(cleaned_history),
+            question[:200],
+        )
+
         return messages
+
+
 
     def build_messages(
         self,
