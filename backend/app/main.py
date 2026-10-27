@@ -9,11 +9,12 @@ from fastapi.responses import JSONResponse
 from ollama import AsyncClient
 
 from app.config import get_settings
-from app.routes import ask, health, productivity, history
+from app.routes import ask, health, productivity, history, uploads
 from app.services.llm import LLM, LLMError
 from app.services.retriever import Retriever
 from app.services.productivity import init_db
 from app.services.chat_history import init_history_db
+from app.services.attachments import init_attachments_db
 
 
 logging.basicConfig(
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     # Initialize databases
     init_db()
     init_history_db()
+    init_attachments_db()
 
     # Initialize application services
     cfg = get_settings()
@@ -69,6 +71,7 @@ app.include_router(ask.router)
 app.include_router(health.router)
 app.include_router(productivity.router)
 app.include_router(history.router)
+app.include_router(uploads.router)
 
 
 @app.exception_handler(LLMError)

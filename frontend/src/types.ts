@@ -2,6 +2,18 @@ export interface AskRequest {
   question: string;
   mode: "normal" | "simplify";
   language: "en" | "hi";
+  conversationId: number;
+  attachmentIds?: string[];
+  studentId?: string;
+}
+
+export interface UploadedAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  kind: "image" | "document";
+  text_extracted: boolean;
 }
 
 export interface Source {

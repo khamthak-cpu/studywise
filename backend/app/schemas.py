@@ -10,8 +10,9 @@ AnswerOrigin = Literal["model", "notes", "web", "mixed", "fallback"]
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=5, max_length=1000)
+    question: str = Field(min_length=1, max_length=1000)
     conversation_id: int | None = Field(default=None, gt=0)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=5)
     student_id: str = Field(default="demo-student", min_length=1, max_length=80)
     class_level: int | None = Field(default=None, ge=8, le=12)
     subject: Subject | None = None

@@ -1,1 +1,5 @@
 # Install dependencies from ../requirements.txt
+
+python-multipart>=0.0.9
+PyMuPDF>=1.24.0
+python-docx>=1.1.0

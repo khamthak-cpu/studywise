@@ -8,7 +8,7 @@ import ChatInput from "../components/ChatInput";
 import AnswerCard from "../components/AnswerCard";
 import ModeToggle from "../components/ModeToggle";
 import StatusBar from "../components/StatusBar";
-import { askQuestion, checkHealth, isMockMode } from "../api/ask";
+import { askQuestion, checkHealth, createConversation, isMockMode, uploadAttachment } from "../api/ask";
 import type { AskResponse, ChatMessage } from "../types";
 import Productivity from "./Productivity";
 
@@ -24,6 +24,7 @@ function createId() {
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const [mode, setMode] = useState<"normal" | "simplify">("normal");
   const [language, setLanguage] = useState<"en" | "hi">("en");
   const [loading, setLoading] = useState(false);
@@ -53,21 +54,47 @@ export default function Home() {
     });
   }, [messages, loading]);
 
-  async function sendQuestion(rawQuestion: string, selectedMode = mode) {
+  async function sendQuestion(rawQuestion: string, selectedMode = mode, files: File[] = []): Promise<boolean> {
     const trimmed = rawQuestion.trim();
-    if (!trimmed || loading) return;
+    if ((!trimmed && files.length === 0) || loading) return false;
+    if (isMockMode && files.length > 0) {
+      setError("File uploads require the live FastAPI backend. Set VITE_USE_MOCK=false and start StudyWise to use uploads.");
+      return false;
+    }
     setError("");
     const userMessage: ChatMessage = { id: createId(), role: "user", content: trimmed, createdAt: new Date() };
     setMessages((current) => [...current, userMessage]);
     setLoading(true);
     setHistory((current) => [trimmed.length > 28 ? `${trimmed.slice(0, 28)}…` : trimmed, ...current].slice(0, 8));
     try {
-      const response: AskResponse = await askQuestion({ question: trimmed, mode: selectedMode, language });
+      let activeConversationId = conversationId;
+      if (!isMockMode && activeConversationId === null) {
+        const created = await createConversation(trimmed.slice(0, 60) || "Study session");
+        activeConversationId = created.id;
+        setConversationId(created.id);
+      }
+
+      let attachmentIds: string[] = [];
+      if (files.length > 0 && activeConversationId !== null) {
+        const uploaded = [];
+        for (const file of files) uploaded.push(await uploadAttachment(file, activeConversationId));
+        attachmentIds = uploaded.map((item) => item.id);
+      }
+
+      const response: AskResponse = await askQuestion({
+        question: trimmed,
+        mode: selectedMode,
+        language,
+        conversationId: activeConversationId ?? 1,
+        attachmentIds,
+      });
       setMessages((current) => [...current, { id: createId(), role: "assistant", content: response.answer, response, createdAt: new Date() }]);
       if (!isMockMode) setStatus(response.mode === "online" ? "online" : "offline");
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
       if (!isMockMode) setStatus("unavailable");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -75,6 +102,7 @@ export default function Home() {
 
   function newChat() {
     setMessages([]);
+    setConversationId(null);
     setError("");
     setHistoryOpen(false);
     setProductivityOpen(false);
@@ -168,7 +196,7 @@ export default function Home() {
         {!productivityOpen && <footer className="composer-area">
           <div className="composer-inner">
             <ModeToggle mode={mode} onModeChange={setMode} language={language} onLanguageChange={setLanguage} />
-            <ChatInput onSend={(value) => sendQuestion(value)} disabled={loading} onSimplify={() => { setMode("simplify"); if (messages.length > 0) { const lastUser = [...messages].reverse().find((message) => message.role === "user"); if (lastUser) sendQuestion(lastUser.content, "simplify"); } }} />
+            <ChatInput onSend={(value, files) => sendQuestion(value, mode, files)} disabled={loading} onSimplify={() => { setMode("simplify"); if (messages.length > 0) { const lastUser = [...messages].reverse().find((message) => message.role === "user"); if (lastUser) sendQuestion(lastUser.content, "simplify"); } }} />
           </div>
         </footer>}
       </main>

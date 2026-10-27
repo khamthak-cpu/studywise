@@ -1,4 +1,4 @@
-import type { AskRequest, AskResponse } from "../types";
+import type { AskRequest, AskResponse, UploadedAttachment } from "../types";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000";
 const USE_MOCK = (import.meta.env.VITE_USE_MOCK as string | undefined) === "true";
@@ -52,6 +52,9 @@ export async function askQuestion(request: AskRequest): Promise<AskResponse> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question: request.question,
+        conversation_id: request.conversationId,
+        student_id: request.studentId ?? "demo-student",
+        attachment_ids: request.attachmentIds ?? [],
         language: request.language,
         simplify: request.mode === "simplify",
         mode: "auto"
@@ -99,6 +102,33 @@ export async function askQuestion(request: AskRequest): Promise<AskResponse> {
     language: data.language,
     latencyMs: data.latency_ms
   };
+}
+
+export async function createConversation(title = "New chat"): Promise<{ id: number; title: string }> {
+  const response = await fetch(`${API_URL}/history/conversations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ student_id: "demo-student", title })
+  });
+  if (!response.ok) throw new Error("Could not start a new conversation.");
+  return await response.json() as { id: number; title: string };
+}
+
+export async function uploadAttachment(file: File, conversationId: number): Promise<UploadedAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("conversation_id", String(conversationId));
+  form.append("student_id", "demo-student");
+  const response = await fetch(`${API_URL}/uploads`, { method: "POST", body: form });
+  if (!response.ok) {
+    let detail = `Upload failed (${response.status}).`;
+    try {
+      const data = await response.json() as { detail?: string };
+      if (data.detail) detail = data.detail;
+    } catch { /* use fallback message */ }
+    throw new Error(detail);
+  }
+  return await response.json() as UploadedAttachment;
 }
 
 export async function checkHealth(): Promise<{

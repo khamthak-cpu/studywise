@@ -9,6 +9,7 @@ from app.schemas import AskRequest, AskResponse
 from app.services import fallback, chat_history
 from app.services.connectivity import is_online
 from app.services.web_search import search_web
+from app.services.attachments import get_selected_attachments, IMAGE_EXTENSIONS
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -111,7 +112,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             history = chat_history.get_recent_messages(
                 student_id=student_id,
                 conversation_id=conversation_id,
-                limit=16,
+                limit=24,
             )
         except ValueError as exc:
             raise HTTPException(
@@ -132,6 +133,42 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
                 status_code=404,
                 detail="Conversation not found",
             )
+
+    attachment_context = ""
+    if req.attachment_ids and conversation_id is None:
+        raise HTTPException(400, "Create a conversation before attaching files.")
+    if conversation_id is not None:
+        try:
+            attachments = get_selected_attachments(
+                student_id, conversation_id, req.attachment_ids
+            )
+            attachment_blocks = []
+            for attachment in attachments:
+                filename = attachment["filename"]
+                extracted = (attachment.get("extracted_text") or "").strip()
+                if attachment["extension"] in IMAGE_EXTENSIONS:
+                    description = await llm.describe_image(attachment["storage_path"])
+                    attachment_blocks.append(
+                        f"[Uploaded image: {filename}]\n{description}"
+                    )
+                elif extracted:
+                    attachment_blocks.append(
+                        f"[Uploaded document: {filename}]\n{extracted}"
+                    )
+                else:
+                    attachment_blocks.append(
+                        f"[Uploaded document: {filename}]\nNo extractable text was found. "
+                        "It may be a scanned PDF; OCR is not configured for this file yet."
+                    )
+            attachment_context = "\n\n".join(attachment_blocks)[:24000]
+        except HTTPException:
+            raise
+        except Exception as exc:
+            log.exception("Could not process uploaded attachment")
+            raise HTTPException(
+                status_code=503,
+                detail=f"Could not process an uploaded file: {exc}",
+            ) from exc
 
     def save_assistant_answer(answer: str) -> None:
         """Persist the final answer once for this request."""
@@ -159,6 +196,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             simplify=req.simplify,
             subject=llm_subject,
             history=history,
+            attachment_context=attachment_context or None,
         )
         direct_answer = await llm.generate(direct_messages)
 
@@ -169,7 +207,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             detail=f"Could not generate an answer: {exc}",
         ) from exc
 
-    needs_rag = not is_coding and (
+    needs_rag = not attachment_context and not is_coding and (
         (mode == "offline" and needs_textbook())
         or direct_answer.strip().startswith("[NEED_RAG]")
         or needs_textbook()
@@ -294,6 +332,7 @@ async def ask(req: AskRequest, request: Request) -> AskResponse:
             simplify=req.simplify,
             subject=llm_subject,
             history=history,
+            attachment_context=attachment_context or None,
         )
 
         answer = await llm.generate(messages)

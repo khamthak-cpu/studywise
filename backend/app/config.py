@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     # Ollama
     ollama_host: str = "http://localhost:11434"
     llm_model: str = "qwen3:4b"          # fits a 6 GB GPU; use gemma2:2b if tight
+    vision_model: str = "llava:7b"        # pull separately with: ollama pull llava:7b
     embed_model: str = "bge-m3"            # MUST match the model used in build_index.py
     llm_timeout_s: float = 90.0
     keep_alive: str = "30m"                # keep model in memory between requests
