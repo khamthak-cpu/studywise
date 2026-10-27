@@ -15,6 +15,9 @@ from app.services.retriever import Retriever
 from app.services.productivity import init_db
 from app.services.chat_history import init_history_db
 from app.services.attachments import init_attachments_db
+from app.routes import ask, health, productivity, history, uploads
+from app.routes import ask, health, productivity, history, uploads
+
 
 
 logging.basicConfig(
