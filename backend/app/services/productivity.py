@@ -1,6 +1,7 @@
 """SQLite persistence and transparent productivity scoring for StudyWise."""
 from __future__ import annotations
 import os, sqlite3
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,23 @@ def connect() -> sqlite3.Connection:
     return db
 
 
+@contextmanager
+def _connection():
+    """Commit or roll back a transaction, and always close the SQLite handle.
+
+    sqlite3.Connection's built-in context manager does not close the connection;
+    explicitly closing here avoids file locks on Windows and leaked connections.
+    """
+    db = connect()
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
+
+
 def init_db() -> None:
-    with connect() as db:
+    with _connection() as db:
         db.executescript("""
         CREATE TABLE IF NOT EXISTS study_tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT, student_id TEXT NOT NULL, title TEXT NOT NULL,
@@ -60,19 +76,19 @@ def _day(value: str | None = None) -> str:
 
 def create_task(student_id: str, title: str, subject: str, planned_minutes: int, due_date: str) -> dict[str, Any]:
     due = _day(due_date)
-    with connect() as db:
+    with _connection() as db:
         cur = db.execute("INSERT INTO study_tasks(student_id,title,subject,planned_minutes,due_date,created_at) VALUES(?,?,?,?,?,?)",
                           (student_id,title.strip(),subject.strip(),planned_minutes,due,_now().isoformat()))
         return dict(db.execute("SELECT * FROM study_tasks WHERE id=?", (cur.lastrowid,)).fetchone())
 
 
 def list_tasks(student_id: str, day: str) -> list[dict[str, Any]]:
-    with connect() as db:
+    with _connection() as db:
         return [dict(r) for r in db.execute("SELECT * FROM study_tasks WHERE student_id=? AND due_date=? ORDER BY status, id DESC", (student_id,_day(day))).fetchall()]
 
 
 def complete_task(student_id: str, task_id: int, completed: bool) -> dict[str, Any] | None:
-    with connect() as db:
+    with _connection() as db:
         cur = db.execute("UPDATE study_tasks SET status=?, completed_at=? WHERE id=? AND student_id=?",
             ("completed" if completed else "pending", _now().isoformat() if completed else None, task_id, student_id))
         if cur.rowcount == 0: return None
@@ -80,7 +96,7 @@ def complete_task(student_id: str, task_id: int, completed: bool) -> dict[str, A
 
 
 def create_session(student_id: str, subject: str, started_at: str, ended_at: str, focused_seconds: int, interruptions: int, task_id: int | None, note: str) -> dict[str, Any]:
-    with connect() as db:
+    with _connection() as db:
         if task_id is not None and not db.execute("SELECT 1 FROM study_tasks WHERE id=? AND student_id=?", (task_id,student_id)).fetchone():
             raise ValueError("task not found for this student")
         cur = db.execute("INSERT INTO study_sessions(student_id,subject,task_id,started_at,ended_at,focused_seconds,interruptions,note) VALUES(?,?,?,?,?,?,?,?)",
@@ -89,7 +105,7 @@ def create_session(student_id: str, subject: str, started_at: str, ended_at: str
 
 
 def create_assessment(student_id: str, subject: str, total: int, correct: int, taken_at: str, delayed_recall: bool) -> dict[str, Any]:
-    with connect() as db:
+    with _connection() as db:
         cur = db.execute("INSERT INTO assessments(student_id,subject,total_questions,correct_answers,taken_at,delayed_recall) VALUES(?,?,?,?,?,?)",
             (student_id,subject.strip(),total,correct,taken_at,int(delayed_recall)))
         return dict(db.execute("SELECT * FROM assessments WHERE id=?",(cur.lastrowid,)).fetchone())
@@ -97,14 +113,14 @@ def create_assessment(student_id: str, subject: str, total: int, correct: int, t
 
 def save_reflection(student_id: str, day: str, reflection: str) -> dict[str, Any]:
     day = _day(day)
-    with connect() as db:
+    with _connection() as db:
         db.execute("INSERT INTO daily_reflections(student_id,day,reflection) VALUES(?,?,?) ON CONFLICT(student_id,day) DO UPDATE SET reflection=excluded.reflection", (student_id,day,reflection.strip()))
         return dict(db.execute("SELECT * FROM daily_reflections WHERE student_id=? AND day=?",(student_id,day)).fetchone())
 
 
 def summary(student_id: str, day: str | None = None) -> dict[str, Any]:
     day = _day(day)
-    with connect() as db:
+    with _connection() as db:
         tasks = db.execute("SELECT COUNT(*) total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) completed FROM study_tasks WHERE student_id=? AND due_date=?",(student_id,day)).fetchone()
         sessions = db.execute("SELECT COALESCE(SUM(focused_seconds),0) seconds, COALESCE(SUM(interruptions),0) interruptions, COUNT(*) count FROM study_sessions WHERE student_id=? AND date(started_at)=?",(student_id,day)).fetchone()
         assessments = db.execute("SELECT COALESCE(SUM(total_questions),0) total, COALESCE(SUM(correct_answers),0) correct, COUNT(*) count FROM assessments WHERE student_id=? AND date(taken_at)=?",(student_id,day)).fetchone()
@@ -119,7 +135,7 @@ def summary(student_id: str, day: str | None = None) -> dict[str, Any]:
     components = [(35,task_score),(25,focus_score),(30,learning_score),(10,100 if (reflection and reflection["reflection"].strip()) else 0 if sessions["count"] or task_total or assessments["count"] or (reflection and reflection["reflection"].strip()) else None)]
     available = [(w,s) for w,s in components if s is not None]
     score = round(sum(w*s for w,s in available) / sum(w for w,_ in available)) if available else None
-    with connect() as db:
+    with _connection() as db:
         week_tasks = db.execute("SELECT COUNT(*) total, SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) completed FROM study_tasks WHERE student_id=? AND due_date BETWEEN date(?, '-6 day') AND date(?)",(student_id,day,day)).fetchone()
         week_assess = db.execute("SELECT COALESCE(SUM(total_questions),0) total, COALESCE(SUM(correct_answers),0) correct FROM assessments WHERE student_id=? AND date(taken_at) BETWEEN date(?, '-6 day') AND date(?)",(student_id,day,day)).fetchone()
         week_seconds = db.execute("SELECT COALESCE(SUM(focused_seconds),0) FROM study_sessions WHERE student_id=? AND date(started_at) BETWEEN date(?, '-6 day') AND date(?)",(student_id,day,day)).fetchone()[0]

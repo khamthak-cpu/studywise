@@ -52,3 +52,14 @@ To use the UI without a working backend, set `VITE_USE_MOCK=true`; sample answer
 - Never commit `.env`, API keys, local virtual environments, or `node_modules`.
 - The ChromaDB index is generated locally from `data/cleaned/`; it is intentionally not bundled in this source archive. Rebuild it if you change `EMBED_MODEL`.
 - `GET /health` reports readiness of Ollama models and the vector index; internet availability is informational and does not guarantee that web search succeeds.
+
+## Backend tests
+
+Run the backend test suite from the `backend` directory. Tests use a mocked local LLM and temporary SQLite storage where practical; they do not require a running Ollama server or access to student data.
+
+```bash
+python -m pip install -r requirements-dev.txt
+PYTHONPATH=. pytest -q
+```
+
+The suite covers API validation and response shapes, upload validation and ownership checks, document text extraction, and LLM success/error handling. These are regression tests, not a substitute for a small manual integration check against your installed Ollama models.
