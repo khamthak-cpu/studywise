@@ -1,4 +1,3 @@
-
 import {
   useEffect,
   useRef,
@@ -25,9 +24,9 @@ import {
 
 import ProductivityDashboard from "./components/ProductivityDashboard";
 
-// --------------------------------------------------
+// ==================================================
 // TYPES
-// --------------------------------------------------
+// ==================================================
 
 type Message = {
   id: number;
@@ -50,9 +49,28 @@ type Attachment = {
 
 type Page = "chat" | "productivity";
 
-// --------------------------------------------------
+type EducationLevel =
+  | "primary"
+  | "middle"
+  | "secondary"
+  | "higher_secondary"
+  | "college";
+
+type AnswerMeta = {
+  confidence: number;
+  answered_from: string;
+  sources: {
+    title: string;
+    section?: string | null;
+    page?: number | null;
+    url?: string | null;
+    score?: number | null;
+  }[];
+};
+
+// ==================================================
 // CONFIGURATION
-// --------------------------------------------------
+// ==================================================
 
 const API_URL = (
   import.meta.env.VITE_API_URL || "http://127.0.0.1:8000"
@@ -73,9 +91,153 @@ const ALLOWED_EXTENSIONS = [
   ".txt",
 ];
 
-// --------------------------------------------------
+const CLASS_OPTIONS: Record<EducationLevel, number[]> = {
+  primary: [1, 2, 3, 4, 5],
+  middle: [6, 7, 8],
+  secondary: [9, 10],
+  higher_secondary: [11, 12],
+  college: [],
+};
+
+// const EDUCATION_LABELS: Record<EducationLevel, string> = {
+//   primary: "Primary School",
+//   middle: "Middle School",
+//   secondary: "Secondary School",
+//   higher_secondary: "Higher Secondary",
+//   college: "College / Undergraduate",
+// };
+
+const DEGREE_OPTIONS = [
+  "B.A.",
+  "B.Sc.",
+  "B.Com.",
+  "B.Tech.",
+  "B.E.",
+  "BCA",
+  "BBA",
+  "B.Pharm.",
+  "Other",
+];
+
+const SUBJECT_OPTIONS: Record<string, string[]> = {
+  primary: [
+    "English",
+    "Mathematics",
+    "EVS",
+    "Hindi",
+  ],
+
+  middle: [
+    "English",
+    "Mathematics",
+    "Science",
+    "Social Science",
+    "Hindi",
+    "Computer Science",
+  ],
+
+  secondary: [
+    "English",
+    "Mathematics",
+    "Science",
+    "Social Science",
+    "Hindi",
+    "Computer Science",
+  ],
+
+  higher_secondary: [
+    "Physics",
+    "Chemistry",
+    "Biology",
+    "Mathematics",
+    "English",
+    "Computer Science",
+    "Accountancy",
+    "Economics",
+    "Business Studies",
+    "History",
+    "Geography",
+    "Political Science",
+  ],
+};
+
+const DEGREE_SUBJECTS: Record<string, string[]> = {
+  "B.Sc.": [
+    "Physics",
+    "Chemistry",
+    "Mathematics",
+    "Botany",
+    "Zoology",
+    "Computer Science",
+  ],
+
+  "B.A.": [
+    "English",
+    "History",
+    "Political Science",
+    "Economics",
+    "Geography",
+    "Sociology",
+    "Psychology",
+  ],
+
+  "B.Com.": [
+    "Accountancy",
+    "Economics",
+    "Business Studies",
+    "Finance",
+  ],
+
+  "B.Tech.": [
+    "Programming",
+    "Data Structures",
+    "Engineering Mathematics",
+    "Physics",
+    "Electronics",
+  ],
+
+  "B.E.": [
+    "Programming",
+    "Data Structures",
+    "Engineering Mathematics",
+    "Physics",
+    "Electronics",
+  ],
+
+  BCA: [
+    "Programming",
+    "Database Management",
+    "Computer Networks",
+    "Mathematics",
+  ],
+
+  BBA: [
+    "Management",
+    "Marketing",
+    "Finance",
+    "Economics",
+    "Business Studies",
+  ],
+
+  "B.Pharm.": [
+    "Pharmaceutics",
+    "Pharmacology",
+    "Pharmaceutical Chemistry",
+    "Pharmacognosy",
+  ],
+
+  Other: [
+    "General Studies",
+    "Mathematics",
+    "Science",
+    "English",
+  ],
+};
+
+
+// ==================================================
 // API HELPER
-// --------------------------------------------------
+// ==================================================
 
 async function apiRequest<T>(
   path: string,
@@ -114,9 +276,9 @@ async function apiRequest<T>(
   return response.json() as Promise<T>;
 }
 
-// --------------------------------------------------
+// ==================================================
 // ANSWER HELPER
-// --------------------------------------------------
+// ==================================================
 
 function getAnswer(data: unknown): string {
   if (typeof data === "string") {
@@ -139,50 +301,100 @@ function getAnswer(data: unknown): string {
     }
   }
 
-  return "The server responded, but I couldn't identify the answer field.";
+  return "";
 }
 
-// --------------------------------------------------
+// ==================================================
 // MAIN APP
-// --------------------------------------------------
+// ==================================================
 
 export default function App() {
-  // Navigation
+  // ------------------------------------------------
+  // NAVIGATION
+  // ------------------------------------------------
+
   const [activePage, setActivePage] = useState<Page>("chat");
 
-  // Chat
+  // ------------------------------------------------
+  // CHAT
+  // ------------------------------------------------
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
+
+  // ------------------------------------------------
+  // EDUCATION SETTINGS
+  // ------------------------------------------------
+
+  const [educationLevel, setEducationLevel] =
+    useState<EducationLevel>("secondary");
+
+  const [classLevel, setClassLevel] = useState("9");
+
+  const [collegeDegree, setCollegeDegree] = useState("B.Sc.");
+
+  const [studyYear, setStudyYear] = useState("1");
+
+  // ------------------------------------------------
+  // STUDY SETTINGS
+  // ------------------------------------------------
+
+  const [subject, setSubject] = useState("English");
+
+  const [studyMode, setStudyMode] = useState("auto");
+
+  const [codingMode, setCodingMode] = useState(false);
+
+  // ------------------------------------------------
+  // APP STATE
+  // ------------------------------------------------
+
   const [loading, setLoading] = useState(false);
+
   const [error, setError] = useState("");
 
-  // Conversation history
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [answerMeta, setAnswerMeta] =
+    useState<AnswerMeta | null>(null);
+
+  // ------------------------------------------------
+  // CONVERSATION HISTORY
+  // ------------------------------------------------
+
+  const [conversations, setConversations] =
+    useState<Conversation[]>([]);
+
   const [activeConversationId, setActiveConversationId] =
     useState<number | null>(null);
+
   const [historyLoading, setHistoryLoading] = useState(true);
 
-  // Attachments
+  // ------------------------------------------------
+  // ATTACHMENTS
+  // ------------------------------------------------
+
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+
   const [uploading, setUploading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ------------------------------------------------
-  // REFRESH CHAT HISTORY
-  // ------------------------------------------------
+  // ==================================================
+  // REFRESH HISTORY
+  // ==================================================
 
   async function refreshHistory() {
     const result = await apiRequest<{ items: Conversation[] }>(
-      `/history/conversations?student_id=${encodeURIComponent(STUDENT_ID)}`,
+      `/history/conversations?student_id=${encodeURIComponent(
+        STUDENT_ID,
+      )}`,
     );
 
     setConversations(result.items);
   }
 
-  // ------------------------------------------------
-  // LOAD CHAT HISTORY ON STARTUP
-  // ------------------------------------------------
+  // ==================================================
+  // LOAD HISTORY ON STARTUP
+  // ==================================================
 
   useEffect(() => {
     let cancelled = false;
@@ -190,7 +402,9 @@ export default function App() {
     async function loadHistory() {
       try {
         const result = await apiRequest<{ items: Conversation[] }>(
-          `/history/conversations?student_id=${encodeURIComponent(STUDENT_ID)}`,
+          `/history/conversations?student_id=${encodeURIComponent(
+            STUDENT_ID,
+          )}`,
         );
 
         if (!cancelled) {
@@ -218,28 +432,55 @@ export default function App() {
     };
   }, []);
 
-  // ------------------------------------------------
-  // CREATE NEW CHAT
-  // ------------------------------------------------
+  // ==================================================
+  // CHANGE EDUCATION LEVEL
+  // ==================================================
+
+  function changeEducationLevel(value: EducationLevel) {
+    setEducationLevel(value);
+
+    const defaults: Record<EducationLevel, string> = {
+      primary: "1",
+      middle: "6",
+      secondary: "9",
+      higher_secondary: "11",
+      college: "",
+    };
+
+    setClassLevel(defaults[value]);
+
+   const availableSubjects =
+    value === "college"
+      ? DEGREE_SUBJECTS[collegeDegree] || []
+      : SUBJECT_OPTIONS[value] || [];
+
+  setSubject(availableSubjects[0] || "");
+}
+
+  // ==================================================
+  // START NEW CHAT
+  // ==================================================
 
   function startNewChat() {
     setActiveConversationId(null);
     setMessages([]);
+    setAnswerMeta(null);
     setQuestion("");
     setAttachments([]);
     setError("");
     setActivePage("chat");
   }
 
-  // ------------------------------------------------
+  // ==================================================
   // OPEN EXISTING CONVERSATION
-  // ------------------------------------------------
+  // ==================================================
 
   async function openConversation(conversationId: number) {
     if (loading || uploading) return;
 
     setError("");
     setActivePage("chat");
+    setAnswerMeta(null);
 
     try {
       const conversation = await apiRequest<{
@@ -254,9 +495,6 @@ export default function App() {
       setActiveConversationId(conversation.id);
       setMessages(conversation.messages);
       setQuestion("");
-
-      // Attachments from an older conversation are not
-      // loaded into the current attachment selection.
       setAttachments([]);
     } catch (err) {
       setError(
@@ -267,9 +505,9 @@ export default function App() {
     }
   }
 
-  // ------------------------------------------------
+  // ==================================================
   // DELETE CONVERSATION
-  // ------------------------------------------------
+  // ==================================================
 
   async function deleteConversation(
     event: MouseEvent<HTMLButtonElement>,
@@ -296,9 +534,7 @@ export default function App() {
       );
 
       setConversations((current) =>
-        current.filter(
-          (conversation) => conversation.id !== conversationId,
-        ),
+        current.filter((item) => item.id !== conversationId),
       );
 
       if (activeConversationId === conversationId) {
@@ -313,9 +549,9 @@ export default function App() {
     }
   }
 
-  // ------------------------------------------------
+  // ==================================================
   // CREATE CONVERSATION IF NEEDED
-  // ------------------------------------------------
+  // ==================================================
 
   async function ensureConversation(): Promise<number> {
     if (activeConversationId !== null) {
@@ -340,9 +576,9 @@ export default function App() {
     return created.id;
   }
 
-  // ------------------------------------------------
+  // ==================================================
   // UPLOAD FILE
-  // ------------------------------------------------
+  // ==================================================
 
   async function uploadFile(file: File) {
     if (loading || uploading) return;
@@ -353,7 +589,7 @@ export default function App() {
 
     if (!ALLOWED_EXTENSIONS.includes(extension)) {
       setError(
-        "Unsupported file type. Please upload a PDF, image, DOCX, or TXT file.",
+        "Unsupported file type. Upload PDF, image, DOCX or TXT.",
       );
       return;
     }
@@ -372,7 +608,6 @@ export default function App() {
     setUploading(true);
 
     try {
-      // The upload endpoint requires an existing conversation.
       const conversationId = await ensureConversation();
 
       const formData = new FormData();
@@ -381,7 +616,6 @@ export default function App() {
       formData.append("student_id", STUDENT_ID);
       formData.append("conversation_id", String(conversationId));
 
-      // Do not manually set Content-Type for FormData.
       const response = await fetch(`${API_URL}/uploads`, {
         method: "POST",
         body: formData,
@@ -430,9 +664,9 @@ export default function App() {
     }
   }
 
-  // ------------------------------------------------
-  // REMOVE ATTACHMENT FROM CURRENT SELECTION
-  // ------------------------------------------------
+  // ==================================================
+  // REMOVE ATTACHMENT
+  // ==================================================
 
   function removeAttachment(attachmentId: string) {
     setAttachments((current) =>
@@ -440,9 +674,9 @@ export default function App() {
     );
   }
 
-  // ------------------------------------------------
+  // ==================================================
   // SEND QUESTION
-  // ------------------------------------------------
+  // ==================================================
 
   async function sendQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -455,26 +689,52 @@ export default function App() {
     setQuestion("");
     setActivePage("chat");
     setLoading(true);
+    setAnswerMeta(null);
 
     let conversationId: number | null = activeConversationId;
 
     try {
-      // Create a conversation if this is the first question.
       conversationId = await ensureConversation();
 
-      // Send the question and selected attachments to the
-      // existing backend /ask endpoint.
+      const requestBody = {
+        question: text,
+
+        student_id: STUDENT_ID,
+
+        conversation_id: conversationId,
+
+        attachment_ids: attachments.map((file) => file.id),
+
+        education_level: educationLevel,
+
+        class_level:
+          educationLevel === "college"
+            ? null
+            : Number(classLevel),
+
+        degree:
+          educationLevel === "college"
+            ? collegeDegree
+            : null,
+
+        study_year:
+          educationLevel === "college"
+            ? Number(studyYear)
+            : null,
+
+        subject: codingMode ? "coding" : subject,
+
+        mode: studyMode,
+
+        coding_mode: codingMode,
+      };
+
       const response = await fetch(`${API_URL}/ask`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          question: text,
-          student_id: STUDENT_ID,
-          conversation_id: conversationId,
-          attachment_ids: attachments.map((file) => file.id),
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const raw = await response.text();
@@ -499,10 +759,21 @@ export default function App() {
         throw new Error(detail);
       }
 
-      // The backend already saves the user question and
-      // assistant answer. Reload the conversation instead
-      // of saving the messages a second time.
       const answer = getAnswer(data);
+
+      if (data && typeof data === "object") {
+        const result = data as Partial<AnswerMeta>;
+
+        setAnswerMeta({
+          confidence: Number(result.confidence || 0),
+          answered_from: String(
+            result.answered_from || "fallback",
+          ),
+          sources: Array.isArray(result.sources)
+            ? result.sources
+            : [],
+        });
+      }
 
       if (!answer) {
         throw new Error("StudyWise returned an empty answer.");
@@ -524,11 +795,12 @@ export default function App() {
       setError(
         err instanceof Error
           ? err.message
-          : "Couldn't complete your request. Check the backend connection.",
+          : "Couldn't complete your request. Check the backend.",
       );
 
-      // If the backend saved the question before an error,
-      // reload the conversation so the UI stays in sync.
+      // Keep the UI synchronized if the server saved
+      // the question before returning an error.
+
       try {
         if (conversationId !== null) {
           const conversation = await apiRequest<{
@@ -552,15 +824,40 @@ export default function App() {
     }
   }
 
-  // ------------------------------------------------
+  // ==================================================
+  // PROVENANCE LABEL
+  // ==================================================
+
+  function getOriginLabel(origin: string) {
+    switch (origin) {
+      case "notes":
+        return "From textbook";
+
+      case "web":
+        return "From web";
+
+      case "model":
+        return "From model memory";
+
+      case "mixed":
+        return "Textbook + web";
+
+      default:
+        return "General answer (not textbook-grounded)";
+    }
+  }
+
+  // ==================================================
   // UI
-  // ------------------------------------------------
+  // ==================================================
 
   return (
     <div className="app-shell">
+
       {/* SIDEBAR */}
 
       <aside className="sidebar">
+
         <div className="brand">
           <div className="brand-icon">
             <GraduationCap size={25} />
@@ -607,7 +904,7 @@ export default function App() {
           <span>Productivity</span>
         </button>
 
-        {/* CHAT HISTORY */}
+        {/* RECENT CHATS */}
 
         <div className="history-heading">
           <span>RECENT CHATS</span>
@@ -615,6 +912,7 @@ export default function App() {
         </div>
 
         <div className="history-list">
+
           {historyLoading ? (
             <p className="history-empty">
               Loading chats...
@@ -643,7 +941,6 @@ export default function App() {
                   title={conversation.title}
                 >
                   <MessageSquare size={15} />
-
                   <span>{conversation.title}</span>
                 </button>
 
@@ -665,18 +962,22 @@ export default function App() {
               </div>
             ))
           )}
+
         </div>
 
         <div className="sidebar-footer">
           <div className="status-dot" />
           <span>StudyWise workspace</span>
         </div>
+
       </aside>
 
       {/* MAIN PANEL */}
 
       <main className="main-panel">
+
         <header className="topbar">
+
           <div className="mobile-brand">
             <GraduationCap size={22} />
             <strong>StudyWise</strong>
@@ -692,19 +993,27 @@ export default function App() {
             <span className="status-dot" />
             Local workspace
           </div>
+
         </header>
 
-        {/* PRODUCTIVITY PAGE */}
+        {/* PRODUCTIVITY */}
 
         {activePage === "productivity" ? (
+
           <ProductivityDashboard />
+
         ) : (
+
           <>
+
             {/* CHAT AREA */}
 
             <section className="chat-area">
+
               {messages.length === 0 ? (
+
                 <div className="welcome">
+
                   <div className="welcome-icon">
                     <BookOpen size={30} />
                   </div>
@@ -723,11 +1032,13 @@ export default function App() {
                   </p>
 
                   <div className="suggestion-grid">
+
                     {[
                       "Explain a difficult concept",
                       "Help me understand a topic",
                       "Give me a step-by-step explanation",
                     ].map((suggestion) => (
+
                       <button
                         type="button"
                         className="suggestion-card"
@@ -735,29 +1046,41 @@ export default function App() {
                         onClick={() => setQuestion(suggestion)}
                       >
                         <span>{suggestion}</span>
+
                         <span className="suggestion-arrow">
                           ↗
                         </span>
                       </button>
+
                     ))}
+
                   </div>
+
                 </div>
+
               ) : (
+
                 <div className="messages">
+
                   {messages.map((message) => (
+
                     <article
                       className={`message message-${message.role}`}
                       key={message.id}
                     >
+
                       <div className="avatar">
+
                         {message.role === "user" ? (
                           <User size={18} />
                         ) : (
                           <Bot size={19} />
                         )}
+
                       </div>
 
                       <div className="message-body">
+
                         <div className="message-author">
                           {message.role === "user"
                             ? "You"
@@ -767,54 +1090,145 @@ export default function App() {
                         <div className="message-content">
                           {message.content}
                         </div>
+
                       </div>
+
                     </article>
+
                   ))}
 
+                  {/* ANSWER SOURCES */}
+
+                  {answerMeta && !loading && (
+
+                    <div
+                      className="answer-provenance"
+                      aria-label="Answer sources"
+                    >
+
+                      <div className="answer-provenance-heading">
+
+                        <strong>
+                          {getOriginLabel(
+                            answerMeta.answered_from,
+                          )}
+                        </strong>
+
+                        <span className="confidence-badge">
+                          {answerMeta.sources.length > 0
+                            ? `Confidence: ${Math.round(
+                                answerMeta.confidence * 100,
+                              )}%`
+                            : "No supporting textbook match"}
+                        </span>
+
+                      </div>
+
+                      {answerMeta.sources.map((source, index) => (
+
+                        <div
+                          className="answer-source"
+                          key={`${source.title}-${index}`}
+                        >
+
+                          {source.url ? (
+                            <a
+                              href={source.url}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {source.title}
+                            </a>
+                          ) : (
+                            <span>{source.title}</span>
+                          )}
+
+                          {source.section
+                            ? ` · ${source.section}`
+                            : ""}
+
+                          {source.page
+                            ? ` · p. ${source.page}`
+                            : ""}
+
+                        </div>
+
+                      ))}
+
+                    </div>
+
+                  )}
+
+                  {/* LOADING */}
+
                   {loading && (
+
                     <div className="message message-assistant">
+
                       <div className="avatar">
                         <Bot size={19} />
                       </div>
 
                       <div className="message-body">
+
                         <div className="message-author">
                           StudyWise
                         </div>
 
                         <div className="loading-text">
+
                           <LoaderCircle
                             className="spin"
                             size={17}
                           />
+
                           Preparing your answer...
+
                         </div>
+
                       </div>
+
                     </div>
+
                   )}
+
                 </div>
+
               )}
+
             </section>
 
             {/* COMPOSER */}
 
             <footer className="composer-area">
+
+              {/* ERROR */}
+
               {error && (
-                <div className="error-message" role="alert">
+
+                <div
+                  className="error-message"
+                  role="alert"
+                >
                   <AlertCircle size={18} />
                   <span>{error}</span>
                 </div>
+
               )}
 
               {/* ATTACHMENT PREVIEWS */}
 
               {attachments.length > 0 && (
+
                 <div className="attachment-list">
+
                   {attachments.map((file) => (
+
                     <div
                       className="attachment-chip"
                       key={file.id}
                     >
+
                       <Paperclip size={14} />
 
                       <span title={file.filename}>
@@ -831,15 +1245,238 @@ export default function App() {
                       >
                         <X size={14} />
                       </button>
+
                     </div>
+
                   ))}
+
                 </div>
+
               )}
+
+              {/* ======================================
+                  EDUCATION AND STUDY CONTROLS
+              ====================================== */}
+
+              <div
+                className="study-controls"
+                aria-label="Study settings"
+              >
+
+                {/* EDUCATION LEVEL */}
+
+                <label>
+                  Education
+
+                  <select
+                    value={educationLevel}
+                    onChange={(e) =>
+                      changeEducationLevel(
+                        e.target.value as EducationLevel,
+                      )
+                    }
+                    disabled={loading || uploading}
+                  >
+
+                    <option value="primary">
+                      Primary School
+                    </option>
+
+                    <option value="middle">
+                      Middle School
+                    </option>
+
+                    <option value="secondary">
+                      Secondary School
+                    </option>
+
+                    <option value="higher_secondary">
+                      Higher Secondary
+                    </option>
+
+                    <option value="college">
+                      College / Undergraduate
+                    </option>
+
+                  </select>
+
+                </label>
+
+                {/* COLLEGE DEGREE AND YEAR */}
+
+                {educationLevel === "college" ? (
+
+                  <>
+
+                    <label>
+                      Degree
+
+                     <select
+                        value={collegeDegree}
+                        onChange={(e) => {
+                          const degree = e.target.value;
+                          setCollegeDegree(degree);
+                          setSubject(DEGREE_SUBJECTS[degree]?.[0] || "");
+                        }}
+                      >
+                        {DEGREE_OPTIONS.map((degree) => (
+                          <option key={degree} value={degree}>
+                            {degree}
+                          </option>
+                        ))}
+                      </select>
+
+                    </label>
+
+                    <label>
+                      Year
+
+                      <select
+                        value={studyYear}
+                        onChange={(e) =>
+                          setStudyYear(e.target.value)
+                        }
+                        disabled={loading || uploading}
+                      >
+
+                        {[1, 2, 3, 4, 5, 6].map((year) => (
+
+                          <option
+                            key={year}
+                            value={year}
+                          >
+                            {year}
+                            {year === 1
+                              ? "st"
+                              : year === 2
+                                ? "nd"
+                                : year === 3
+                                  ? "rd"
+                                  : "th"}{" "}
+                            year
+                          </option>
+
+                        ))}
+
+                      </select>
+
+                    </label>
+
+                  </>
+
+                ) : (
+
+                  /* SCHOOL CLASS */
+
+                  <label>
+                    Class
+
+                    <select
+                      value={classLevel}
+                      onChange={(e) =>
+                        setClassLevel(e.target.value)
+                      }
+                      disabled={loading || uploading}
+                    >
+
+                      {CLASS_OPTIONS[educationLevel].map(
+                        (classNumber) => (
+
+                          <option
+                            key={classNumber}
+                            value={classNumber}
+                          >
+                            Class {classNumber}
+                          </option>
+
+                        ),
+                      )}
+
+                    </select>
+
+                  </label>
+
+                )}
+
+                {/* SUBJECT */}
+
+               <label>
+                  Subject
+
+                  <select
+                    value={subject}
+                    onChange={(e) => {
+                      setSubject(e.target.value);
+                    }}
+                    disabled={loading || uploading || codingMode}
+                  >
+                    {(educationLevel === "college"
+                      ? DEGREE_SUBJECTS[collegeDegree] || []
+                      : SUBJECT_OPTIONS[educationLevel] || []
+                    ).map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {/* MODE */}
+
+                <label>
+                  Mode
+
+                  <select
+                    value={studyMode}
+                    onChange={(e) =>
+                      setStudyMode(e.target.value)
+                    }
+                    disabled={loading || uploading}
+                  >
+
+                    <option value="auto">
+                      Auto
+                    </option>
+
+                    <option value="offline">
+                      Textbook only
+                    </option>
+
+                    <option value="online">
+                      Web enabled
+                    </option>
+
+                  </select>
+
+                </label>
+
+                {/* CODING */}
+
+                <label className="coding-toggle">
+
+                  <input
+                    type="checkbox"
+                    checked={codingMode}
+                    onChange={(e) =>
+                      setCodingMode(e.target.checked)
+                    }
+                    disabled={loading || uploading}
+                  />
+
+                  Coding
+
+                </label>
+
+              </div>
+
+              {/* ======================================
+                  MESSAGE INPUT
+              ====================================== */}
 
               <form
                 className="composer"
                 onSubmit={sendQuestion}
               >
+
                 {/* HIDDEN FILE INPUT */}
 
                 <input
@@ -848,14 +1485,15 @@ export default function App() {
                   hidden
                   accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.txt"
                   onChange={(event) => {
+
                     const file = event.target.files?.[0];
 
                     if (file) {
                       void uploadFile(file);
                     }
 
-                    // Allows selecting the same file again.
                     event.target.value = "";
+
                   }}
                 />
 
@@ -875,14 +1513,20 @@ export default function App() {
                   title="Attach a file"
                   aria-label="Attach a file"
                 >
+
                   {uploading ? (
+
                     <LoaderCircle
                       className="spin"
                       size={19}
                     />
+
                   ) : (
+
                     <Paperclip size={19} />
+
                   )}
+
                 </button>
 
                 {/* QUESTION INPUT */}
@@ -893,14 +1537,17 @@ export default function App() {
                     setQuestion(event.target.value)
                   }
                   onKeyDown={(event) => {
+
                     if (
                       event.key === "Enter" &&
                       !event.shiftKey &&
                       !event.nativeEvent.isComposing
                     ) {
                       event.preventDefault();
+
                       event.currentTarget.form?.requestSubmit();
                     }
+
                   }}
                   placeholder="Ask StudyWise a question..."
                   aria-label="Your question"
@@ -920,26 +1567,42 @@ export default function App() {
                   }
                   aria-label="Send question"
                 >
+
                   {loading ? (
+
                     <LoaderCircle
                       className="spin"
                       size={19}
                     />
+
                   ) : (
+
                     <Send size={18} />
+
                   )}
+
                 </button>
+
               </form>
 
+              {/* FOOTER NOTE */}
+
               <p className="composer-note">
+
                 {uploading
                   ? "Uploading your file..."
                   : "StudyWise can make mistakes. Verify important information."}
+
               </p>
+
             </footer>
+
           </>
+
         )}
+
       </main>
+
     </div>
   );
 }

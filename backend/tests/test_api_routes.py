@@ -23,7 +23,7 @@ def test_ask_returns_expected_response_shape(test_app):
     assert response.status_code == 200
     data = response.json()
     assert data["answer"] == "A test answer."
-    assert data["answered_from"] == "fallback"
+    assert data["answered_from"] == "model"
     assert data["sources"] == []
     assert data["language"] == "en"
     assert isinstance(data["latency_ms"], int)
@@ -62,3 +62,29 @@ def test_ask_returns_controlled_error_when_llm_fails(test_app):
     response = client.post("/ask", json={"question": "Explain gravity", "mode": "offline"})
     assert response.status_code == 503
     assert "Could not generate an answer" in response.json()["detail"]
+
+
+def test_short_followup_is_rewritten_with_previous_topic():
+    from app.routes.ask import _standalone_query
+
+    history = [
+        {"role": "user", "content": "Explain Newton's second law."},
+        {"role": "assistant", "content": "It relates net force, mass and acceleration."},
+    ]
+    rewritten = _standalone_query("Why?", history)
+    assert "Newton's second law" in rewritten
+    assert "net force" in rewritten
+
+
+def test_short_followup_without_history_stays_unchanged():
+    from app.routes.ask import _standalone_query
+
+    assert _standalone_query("Why?", []) == "Why?"
+
+
+def test_coding_mode_is_explicit_not_keyword_guessed():
+    from app.routes.ask import _is_coding_request
+    from app.schemas import AskRequest
+
+    assert not _is_coding_request(AskRequest(question="Explain Python's role in science"))
+    assert _is_coding_request(AskRequest(question="write a program", coding_mode=True))

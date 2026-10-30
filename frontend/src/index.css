@@ -954,3 +954,14 @@ button:disabled {
   display: flex;
   padding: 2px;
 }
+
+/* Study selectors and answer provenance */
+.study-controls { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 10px; font-size:12px; color:var(--text-secondary, #777); }
+.study-controls label { display:flex; align-items:center; gap:6px; }
+.study-controls select { border:1px solid var(--border, #ddd); border-radius:8px; padding:6px 9px; background:var(--surface, white); color:inherit; }
+.study-controls .coding-toggle { gap:5px; }
+.answer-provenance { margin:8px 0 18px 48px; padding:10px 12px; border:1px solid var(--border, #ddd); border-radius:10px; font-size:12px; color:var(--text-secondary, #777); }
+.answer-provenance-heading { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:5px; }
+.answer-provenance-heading strong { color:var(--text-primary, #333); }
+.confidence-badge { padding:3px 7px; border-radius:999px; background:var(--surface-secondary, #eee); }
+.answer-source { margin-top:3px; }
