@@ -110,21 +110,74 @@ class Retriever:
 
         return response.embeddings[0]
 
+    
     @staticmethod
     def _where(
         class_level: int | None,
         subject: str | None,
     ) -> dict[str, Any] | None:
         """Build ChromaDB metadata filters."""
+
         conditions = []
 
         if class_level is not None:
-            conditions.append({"class_level": int(class_level)})
+            conditions.append({
+                "class_level": int(class_level)
+            })
 
         if subject:
             normalized_subject = subject.strip().lower()
-            if normalized_subject:
-                conditions.append({"subject": normalized_subject})
+
+            subject_aliases = {
+                "mathematics": ["mathematics", "math", "maths"],
+                "computer science": [
+                    "computer science",
+                    "computer_science",
+                    "computer-science",
+                ],
+                "social science": [
+                    "social science",
+                    "social_science",
+                    "social-science",
+                ],
+                "political science": [
+                    "political science",
+                    "political_science",
+                ],
+                "data structures": [
+                    "data structures",
+                    "data_structures",
+                ],
+                "engineering mathematics": [
+                    "engineering mathematics",
+                    "engineering_mathematics",
+                ],
+                "database management": [
+                    "database management",
+                    "database_management",
+                ],
+                "computer networks": [
+                    "computer networks",
+                    "computer_networks",
+                ],
+            }
+
+            values = subject_aliases.get(
+                normalized_subject,
+                [normalized_subject],
+            )
+
+            if len(values) == 1:
+                conditions.append({
+                    "subject": values[0]
+                })
+            else:
+                conditions.append({
+                    "$or": [
+                        {"subject": value}
+                        for value in values
+                    ]
+                })
 
         if not conditions:
             return None
@@ -133,6 +186,7 @@ class Retriever:
             return conditions[0]
 
         return {"$and": conditions}
+
 
     async def search(
         self,

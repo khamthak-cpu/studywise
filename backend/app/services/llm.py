@@ -131,7 +131,7 @@ class LLM:
             ),
         ]
 
-        if subject == "math":
+        if subject == "Mathematics":
             prompt = _prompt("math")
             if prompt:
                 parts.append(prompt)
